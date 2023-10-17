@@ -30,98 +30,115 @@ public final class RuntimePluginDiscovery {
 
     private final RuntimeLib runtimeLib;
     private final List<RuntimePlugin> runtimePlugins = new ArrayList<>();
+    private URLClassLoader runtimePluginClassLoader;
 
     public void loadRuntimePlugins() {
-        List<RuntimePlugin> runtimePlugins = new ArrayList<>();
-        File pluginsFolder = runtimeLib.getDataFolder().getParentFile();
+        boolean fullLog = runtimeLib.getRuntimeLibConfig().getFullDebug();
         Logger logger = runtimeLib.getLogger();
-        if (pluginsFolder == null || !pluginsFolder.exists()) {
+        List<RuntimePlugin> runtimePlugins = new ArrayList<>();
+        File pluginsFolder = new File(runtimeLib.getDataFolder().getAbsolutePath() + File.separator + "runtime-plugins");
+
+        if (!pluginsFolder.exists()) {
+            if (fullLog) {
+                logger.info("The runtime-plugins folder didn't exist, we created one. \n" +
+                        "Please, remember to add your Runtime Plugins here, and not in the parent folder!\n" +
+                        "Thanks for choosing RuntimeLib!");
+            }
+            boolean result = pluginsFolder.mkdirs();
+            return;
+        }
+
+        if (!pluginsFolder.exists()) {
             logger.warning("ERROR: The plugin folder was not found.");
             return;
         }
-        File[] jarFiles = pluginsFolder.listFiles(f -> Files.getFileExtension(f.getName()).equals(".jar"));
+
+        File[] jarFiles = pluginsFolder.listFiles();
+
         if (jarFiles == null) {
             logger.warning("ERROR: No JAR files were found in the plugins directory!");
             return;
+        } else if (fullLog) {
+            logger.info("Found following JARs to load:" + Arrays.stream(jarFiles).map(File::getName).collect(Collectors.joining(", ")));
+        } else if (jarFiles.length == 0) {
+            logger.info("No Runtime JARs were found!");
+            return;
         }
+
         List<File> jarFilesList = Arrays.asList(jarFiles);
-        List<Plugin> loadedPlugins = Arrays.asList(Bukkit.getPluginManager().getPlugins());
-        List<File> filteredJarList = jarFilesList.stream().filter(f -> loadedPlugins.stream().noneMatch(p -> {
-            JavaPlugin plugin = (JavaPlugin) p;
-            Method getFileMethod = null;
-            try {
-                getFileMethod = JavaPlugin.class.getDeclaredMethod("getFile");
-                getFileMethod.setAccessible(true);
-                File file = (File) getFileMethod.invoke(plugin);
-                return file.equals(f);
-            } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-                logger.warning("ERROR: Something went wrong while using getFile reflection.");
-                logger.warning(e.getLocalizedMessage());
-            }
-            return false;
-        })).collect(Collectors.toList());
-        List<URL> urlsList = filteredJarList.stream().map(file -> {
+
+        if (fullLog) logger.info("Starting JAR files URL validation phase.");
+
+        List<URL> urlsList = jarFilesList.stream().map(file -> {
             try {
                 return file.toURI().toURL();
             } catch (MalformedURLException e) {
-                logger.warning("ERROR: List getting URL of " + file.getName());
+                logger.warning("ERROR: List getting URL for " + file.getName());
                 return null;
             }
         }).filter(Objects::nonNull).collect(Collectors.toList());
 
+        if (fullLog) logger.info("Successfully found and validated " + urlsList.size() + " JAR URLs.");
+
         URL[] urls = new URL[urlsList.size()];
         urls = urlsList.toArray(urls);
 
-        try (URLClassLoader classLoader = new URLClassLoader(urls, ClassLoader.getSystemClassLoader())) {
-            label:
-            for (File candidate : filteredJarList) {
-                List<String> classNames = new ArrayList<String>();
-                try {
-                    ZipInputStream zip = new ZipInputStream(java.nio.file.Files.newInputStream(candidate.toPath()));
-                    for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-                        if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
-                            // This ZipEntry represents a class. Now, what class does it represent?
-                            final String className = entry.getName().replace('/', '.'); // including ".class"
-                            classNames.add(className.substring(0, className.length() - ".class".length()));
-                        }
+        URLClassLoader classLoader = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+        this.runtimePluginClassLoader = classLoader;
+
+        label:
+        for (File candidate : jarFilesList) {
+            List<String> classNames = new ArrayList<>();
+            try {
+                ZipInputStream zip = new ZipInputStream(java.nio.file.Files.newInputStream(candidate.toPath()));
+                for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                    if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
+                        // This ZipEntry represents a class. Now, what class does it represent?
+                        String className = entry.getName().replace('/', '.'); // including ".class"
+                        if (fullLog)
+                            logger.info("Discovered class content \"" + className + "\" of " + candidate.getName());
+                        String addClassName = className.substring(0, className.length() - ".class".length());
+                        classNames.add(addClassName);
                     }
-                    zip.close();
-                } catch (IOException e) {
-                    logger.warning("ERROR: problem during jar zip reading phase!");
+                }
+                zip.close();
+            } catch (IOException e) {
+                logger.warning("ERROR: problem during jar zip reading phase!");
+                logger.warning(e.getLocalizedMessage());
+            }
+
+            for (String className : classNames) {
+                try {
+                    if (fullLog) logger.info("Attempting to load class \"" + className + "\".");
+                    Class<?> tempClass = Class.forName(className, true, classLoader);
+                    if (RuntimePlugin.class.isAssignableFrom(tempClass)) {
+                        logger.info("Found suitable plugin candidate class: " + className);
+                        logger.info("Attempting to load . . .");
+                        // assume safe constructor cast
+                        Constructor<? extends RuntimePlugin> tempConstructor = (Constructor<? extends RuntimePlugin>) tempClass.getConstructor();
+                        RuntimePlugin instance = tempConstructor.newInstance();
+                        this.runtimePlugins.add(instance);
+                        continue label;
+                    }
+                } catch (ClassNotFoundException e) {
+                    logger.warning("ERROR: problem during class forName search phase!");
+                    logger.warning(e.getLocalizedMessage());
+                } catch (NoSuchMethodException e) {
+                    logger.warning("ERROR: could not find standard constructor for " + className);
+                    logger.warning(e.getLocalizedMessage());
+                } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
+                    logger.warning("ERROR: Could not create new instance for " + className);
                     logger.warning(e.getLocalizedMessage());
                 }
-
-                for (String className : classNames) {
-                    try {
-                        Class<?> tempClass = Class.forName(className, Boolean.TRUE, classLoader);
-                        if (RuntimePlugin.class.isAssignableFrom(tempClass)) {
-                            logger.info("Found suitable plugin candidate class: " + className);
-                            logger.info("Attempting to load . . .");
-                            // assume safe constructor cast
-                            Constructor<? extends RuntimePlugin> tempConstructor = (Constructor<? extends RuntimePlugin>) tempClass.getConstructor();
-                            RuntimePlugin instance = tempConstructor.newInstance();
-                            this.runtimePlugins.add(instance);
-                            continue label;
-                        }
-                    } catch (ClassNotFoundException e) {
-                        logger.warning("ERROR: problem during class forName search phase!");
-                        logger.warning(e.getLocalizedMessage());
-                    } catch (NoSuchMethodException e) {
-                        logger.warning("ERROR: could not find standard constructor for " + className);
-                        logger.warning(e.getLocalizedMessage());
-                    } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
-                        logger.warning("ERROR: Could not create new instance for " + className);
-                        logger.warning(e.getLocalizedMessage());
-                    }
-                }
             }
-        } catch (IOException exception) {
-            logger.warning("ERROR: Could not build\\get system classloader.");
         }
+
     }
 
     public void startAll() {
-        this.runtimePlugins.forEach(RuntimePlugin::onEnable);
+        this.runtimePlugins.forEach(rp -> {
+            runtimeLib.getLogger().info("Enabling runtime plugin " + rp.getClass().getSimpleName());
+        });
     }
 
     public void stopAll() {
