@@ -83,7 +83,7 @@ public final class RuntimePluginDiscovery {
         URL[] urls = new URL[urlsList.size()];
         urls = urlsList.toArray(urls);
 
-        URLClassLoader classLoader = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+        URLClassLoader classLoader = new URLClassLoader(urls, getClass().getClassLoader());
         this.runtimePluginClassLoader = classLoader;
 
         label:
@@ -138,10 +138,14 @@ public final class RuntimePluginDiscovery {
     public void startAll() {
         this.runtimePlugins.forEach(rp -> {
             runtimeLib.getLogger().info("Enabling runtime plugin " + rp.getClass().getSimpleName());
+            rp.onEnable();
         });
     }
 
     public void stopAll() {
-        this.runtimePlugins.forEach(RuntimePlugin::onDisable);
+        this.runtimePlugins.forEach(rp -> {
+            runtimeLib.getLogger().info("Disabling runtime plugin " + rp.getClass().getSimpleName());
+            rp.onDisable();
+        });
     }
 }
