@@ -1,10 +1,6 @@
 package top.cmarco.runtimelib.loader;
 
-import com.google.common.io.Files;
 import lombok.RequiredArgsConstructor;
-import org.bukkit.Bukkit;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.java.JavaPlugin;
 import top.cmarco.runtimecore.RuntimePlugin;
 import top.cmarco.runtimelib.RuntimeLib;
 
@@ -12,7 +8,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -25,6 +20,15 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+/**
+ * The `RuntimePluginDiscovery` class is responsible for discovering and loading runtime plugins in a Minecraft server.
+ * It searches for JAR files in a designated folder, validates them, and loads suitable classes that implement the `RuntimePlugin` interface.
+ * This class provides methods to start and stop all loaded runtime plugins.
+ *
+ * @author Marco C.
+ * @version 1.0.0
+ * @since 17 Oct. 2023
+ */
 @RequiredArgsConstructor
 public final class RuntimePluginDiscovery {
 
@@ -32,6 +36,12 @@ public final class RuntimePluginDiscovery {
     private final List<RuntimePlugin> runtimePlugins = new ArrayList<>();
     private URLClassLoader runtimePluginClassLoader;
 
+    /**
+     * Load runtime plugins from the designated folder .../RuntimeLib/runtime-plugins/.
+     * It searches for JAR files, validates them,
+     * and loads suitable classes that implement the `RuntimePlugin` interface.
+     * Loaded runtime plugins are stored in the `runtimePlugins` list.
+     */
     public void loadRuntimePlugins() {
         boolean fullLog = runtimeLib.getRuntimeLibConfig().getFullDebug();
         Logger logger = runtimeLib.getLogger();
@@ -135,6 +145,10 @@ public final class RuntimePluginDiscovery {
 
     }
 
+    /**
+     * Start all loaded runtime plugins. This method invokes the `onEnable` method
+     * on each loaded plugin.
+     */
     public void startAll() {
         this.runtimePlugins.forEach(rp -> {
             runtimeLib.getLogger().info("Enabling runtime plugin " + rp.getClass().getSimpleName());
@@ -142,10 +156,15 @@ public final class RuntimePluginDiscovery {
         });
     }
 
+    /**
+     * Stop all loaded runtime plugins. This method invokes the `onDisable` method
+     * on each loaded plugin.
+     */
     public void stopAll() {
         this.runtimePlugins.forEach(rp -> {
             runtimeLib.getLogger().info("Disabling runtime plugin " + rp.getClass().getSimpleName());
             rp.onDisable();
         });
     }
+
 }
