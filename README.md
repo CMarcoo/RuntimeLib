@@ -28,9 +28,17 @@ The **RuntimePlugin** library is a powerful tool that enables you to run custom 
 
 ## Usage Examples
 
+Through this plugin you will be able to load as many other "RuntimePlugins" as you wish. In order to do so, you must develop and compile your own
+JAR file which **should not** shade\include RuntimeCore library, but only use it as a runtime dependency.
+After having done such, you will need to install the RuntimeLib JAR in your server, and you will find that it will create a folder named "runtime-plugins" inside its server data folder "plugins/RuntimeLib".
+You will place your custom plugins there, and they will be automatically loaded. No plugin.yml or anything similar is required as now! Your main class will be
+automatically found as long as it correctly implements RuntimePlugin. 
+
+**NOTE:** __Do not implement RuntimePlugin twice in your project.__ 
+
 To demonstrate how the **RuntimePlugin** library can be used, let's consider an example where you create a simple Spigot plugin. You can run your custom plugin using the RuntimeCore API.
 
-### Example: Java Main Class
+## Example: Java Main Class
 
 ```java
 import top.cmarco.runtimecore.RuntimePlugin;
@@ -40,7 +48,7 @@ import top.cmarco.runtimecore.annotations.SpigotVersion;
  * Hello world!
  */
 @SpigotVersion(version = "1.20.2") // optional here
-public final class App implements RuntimePlugin {
+public final class MyFirstRuntimePlugin implements RuntimePlugin {
 
     @Override
     public void onEnable() {
