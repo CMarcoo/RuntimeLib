@@ -36,6 +36,8 @@ automatically found as long as it correctly implements RuntimePlugin.
 
 **NOTE:** __Do not implement RuntimePlugin twice in your project.__ 
 
+You can find RuntimeCore here: https://github.com/CMarcoo/RuntimeCore
+
 To demonstrate how the **RuntimePlugin** library can be used, let's consider an example where you create a simple Spigot plugin. You can run your custom plugin using the RuntimeCore API.
 
 ## Example: Java Main Class
