@@ -1,0 +1,3 @@
+name: RuntimeLib
+version: '${project.version}'
+main: top.cmarco.runtimelib.RuntimeLib
