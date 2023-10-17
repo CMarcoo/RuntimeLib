@@ -10,6 +10,8 @@
 
 **Supported Spigot Version:** 1.8.8 and above
 
+**License:** This project is under GNU GPL v3.0. It is not an issue to you as importing this library is not necessary for creating custom runtime plugins! :)
+
 The **RuntimePlugin** library is a powerful tool that enables you to run custom Spigot plugins in your Minecraft server without the need to import the SpigotAPI directly. This library provides an easy and flexible way to develop and run your plugins without the constraints of the GNU General Public License (GPL) that typically applies to Spigot-based projects.
 
 ## Features
